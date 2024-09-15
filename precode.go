@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -40,13 +41,66 @@ var tasks = map[string]Task{
 }
 
 // Ниже напишите обработчики для каждого эндпоинта
-// ...
+// Обработчик для получения всех задач
+func getAllTasks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(tasks); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// Обработчик для отправки задачи на сервер
+func createTask(w http.ResponseWriter, r *http.Request) {
+	var newTask Task
+
+	if err := json.NewDecoder(r.Body).Decode(&newTask); err != nil {
+		http.Error(w, "Запрос некорректный", http.StatusBadRequest)
+		return
+	}
+
+	tasks[newTask.ID] = newTask
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(newTask)
+}
+
+// Обработчик для получения задачи по ID
+func getTaskByID(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "id")
+
+	if task, ok := tasks[taskID]; ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(task)
+	} else {
+		http.Error(w, "Запрос некорректный", http.StatusBadRequest)
+	}
+}
+
+// Обработчик удаления задачи по ID
+func deleteTask(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "id")
+
+	if _, ok := tasks[taskID]; ok {
+		delete(tasks, taskID)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("Task with ID %s deleted", taskID)))
+	} else {
+		http.Error(w, "Запрос некорректный", http.StatusBadRequest)
+	}
+}
 
 func main() {
 	r := chi.NewRouter()
 
 	// здесь регистрируйте ваши обработчики
 	// ...
+	r.Get("/tasks", getAllTasks)
+	r.Post("/tasks", createTask)
+	r.Get("/tasks/{id}", getTaskByID)
+	r.Delete("/tasks/{id}", deleteTask)
 
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		fmt.Printf("Ошибка при запуске сервера: %s", err.Error())
